@@ -2,13 +2,38 @@
 #include <string>
 #include <vector>
 #include <fstream>
-#include <time.h>
 
-#define KEY_ESC 27
 #define MENU_HEIGHT 2
 
-#define CTRL_S 0x13
+#define CTRL_A 0x01
+#define CTRL_B 0x02
+#define CTRL_C 0x03
+#define CTRL_D 0x04
+#define CTRL_E 0x05
+#define CTRL_F 0x06
+#define CTRL_G 0x07
+#define CTRL_H 0x08
+#define CTRL_I 0x09
+#define CTRL_J 0x0A
+#define CTRL_K 0x0B
+#define CTRL_L 0x0C
+#define CTRL_M 0x0D
+#define CTRL_N 0x0E
+#define CTRL_O 0x0F
+#define CTRL_P 0x10
 #define CTRL_Q 0x11
+#define CTRL_R 0x12
+#define CTRL_S 0x13
+#define CTRL_T 0x14
+#define CTRL_U 0x15
+#define CTRL_V 0x16
+#define CTRL_W 0x17
+#define CTRL_X 0x18
+#define CTRL_Y 0x19
+#define CTRL_Z 0x1A
+#define KEY_ESC 0x1B
+#define HOR_TAB CTRL_I
+#define LINE_FEED CTRL_J
 
 int width,height,sx,sy;
 void moveLeft();
@@ -21,15 +46,14 @@ class editor
 private:
     std::vector<std::string> rows;
     std::string message;
-    time_t curr_time;
     std::string displaying_name;
     std::string file_name;
 public:
     int xoff,yoff;
     bool modif;
-    editor(): xoff{0},yoff{0} { rows.push_back(""); modif = false; curr_time = 0; };
+    editor(): xoff{0},yoff{0} { rows.push_back(""); modif = false; };
 
-    void setFileName(std::string str)
+    void setFileName(std::string str) //
     {
         if(str.empty()) {
             displaying_name = "Unnamed";
@@ -45,6 +69,7 @@ public:
                 break;
         it++;
         
+        displaying_name.clear();
         displaying_name.append(&(*it));
     }
 
@@ -73,7 +98,7 @@ public:
     {
         int txtsz = 0;
         move(height-MENU_HEIGHT,0);
-        if(curr_time == 0) {
+        if(message.empty()) {
             printw("| CTRL+Q to exit |");
             txtsz += 18;
 
@@ -97,18 +122,18 @@ public:
                 printw(" %s |",displaying_name.c_str());
         }
         else{
-            int diff = time(NULL)-curr_time;
-            if(time(NULL)-curr_time < 5)
-                printw("%s",message.c_str());
-            else
-                curr_time = 0;
+            printw("%s",message.c_str());
         }
     }
 
-    void addTempMessage(std::string str)
+    void addMessage(std::string str)
     {
         message.append(str);
-        curr_time = time(NULL);
+    }
+
+    void eraseMessage()
+    {
+        message.clear();
     }
 
     void printRows()
@@ -181,18 +206,27 @@ public:
     void writeInFile()
     {
         if(file_name.empty()) {
+            std::string buff;
             chtype c;
-            addTempMessage("ECS to cancel | Enter name of the file: ");
+            addMessage("ECS to cancel | Enter name of the file: ");
+            printRows();
             while(c = getch()) {
                 if(c == KEY_ESC)
-                    return;
-                if(c == '\n' && !file_name.empty())
+                    break;
+                if(c == '\n' && !buff.empty())
                     break;
                 if(c == '\n')
                     continue;
-                else if(isdigit(c) || isalpha(c))
-                    file_name.push_back(c);
+                else if(isdigit(c) || isalpha(c) || c == '.')
+                    buff.push_back(c);
+                addMessage(buff);
+                printRows();
+                eraseMessage();
+                addMessage("ECS to cancel | Enter name of the file: ");
             }
+            setFileName(buff);
+            eraseMessage();
+            printRows();
         }
         std::ofstream file(file_name);
         if(!file.is_open())
@@ -422,20 +456,28 @@ void openFile(std::string name)
 
 void keyProcess()
 {
-    static bool sexit = false;
-    
     chtype c = getKey();
     int pos_x = getcurx(stdscr);
     int pos_y = getcury(stdscr);
     int count;
     switch (c) {
         case CTRL_Q:
-            if(sexit == true || E.modif == false) {
+            if(E.modif == false) {
                 endProg(0);
             }
             else {
-                sexit = true;
-                E.addTempMessage("All changes not will be saved!");
+                E.addMessage("All changes not will be saved! You are sure? y or n ");
+                E.printRows();
+                while(1) {
+                    c = getKey();
+                    if(tolower(c) == 'y')
+                        endProg(0);
+                    if(tolower(c) == 'n') {
+                        E.eraseMessage();
+                        E.printRows();
+                        return;
+                    }
+                }
             }
             break;
         
@@ -443,7 +485,31 @@ void keyProcess()
             E.writeInFile();
             break;
 
-        case '\t':
+        case CTRL_A: // not realesed
+        case CTRL_B:
+        case CTRL_C:
+        case CTRL_D:
+        case CTRL_E:
+        case CTRL_F:
+        case CTRL_G:
+        case CTRL_H:
+        case CTRL_K:
+        case CTRL_L:
+        case CTRL_M:
+        case CTRL_N:
+        case CTRL_O:
+        case CTRL_P:
+        case CTRL_R:
+        case CTRL_T:
+        case CTRL_U:
+        case CTRL_V:
+        case CTRL_W:
+        case CTRL_X:
+        case CTRL_Y:
+        case CTRL_Z:
+            break;
+
+        case HOR_TAB:
             E.modif = true;
             count = TABSIZE;
             while(count--)
@@ -495,7 +561,7 @@ void keyProcess()
             break;
 
         case KEY_IL:
-        case '\n':
+        case LINE_FEED:
         case KEY_ENTER:
             E.modif = true;
             insertRowBack("");
