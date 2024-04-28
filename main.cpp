@@ -6,8 +6,9 @@
 
 #define KEY_ESC 27
 #define MENU_HEIGHT 2
-#define ctrl(x) ((x)&0x1f)
-#define CTRL_S ctrl('s')
+
+#define CTRL_S 0x13
+#define CTRL_Q 0x11
 
 int width,height,sx,sy;
 void moveLeft();
@@ -21,11 +22,31 @@ private:
     std::vector<std::string> rows;
     std::string message;
     time_t curr_time;
-public:
+    std::string displaying_name;
     std::string file_name;
+public:
     int xoff,yoff;
     bool modif;
     editor(): xoff{0},yoff{0} { rows.push_back(""); modif = false; curr_time = 0; };
+
+    void setFileName(std::string str)
+    {
+        if(str.empty()) {
+            displaying_name = "Unnamed";
+            return;
+        }
+        file_name = str;
+
+        auto it = str.end()-1;
+        auto b = str.begin();
+
+        while(it-- > b)
+            if(*it == '/' || *it == '\\')
+                break;
+        it++;
+        
+        displaying_name.append(&(*it));
+    }
 
     void insertChar(char c)
     {
@@ -53,18 +74,27 @@ public:
         int txtsz = 0;
         move(height-MENU_HEIGHT,0);
         if(curr_time == 0) {
-            printw("| ESC to exit |");
-            txtsz += 16;
+            printw("| CTRL+Q to exit |");
+            txtsz += 18;
 
             if(modif) {
                 printw(" Modified |");
-                txtsz += 12;
+                txtsz += 11;
             }
             else {
                 printw(" Saved |");
-                txtsz += 9;
+                txtsz += 8;
             }
-            printw(" %s |",file_name.c_str());
+            int sz = width-txtsz-2;
+            if(sz < displaying_name.size()-1) {
+                for (size_t i = 0; i < sz; i++)
+                {
+                    addch(displaying_name[i]);
+                }
+                addch('|');
+            }
+            else
+                printw(" %s |",displaying_name.c_str());
         }
         else{
             int diff = time(NULL)-curr_time;
@@ -75,7 +105,7 @@ public:
         }
     }
 
-    void addMessage(std::string str)
+    void addTempMessage(std::string str)
     {
         message.append(str);
         curr_time = time(NULL);
@@ -118,7 +148,7 @@ public:
 
     }
 
-    void delRow()               //delete row (not backspace), erase row below
+    void delRow()               //delete row (erase row below)
     {
         sx = getcurx(stdscr);
         sy = getcury(stdscr);
@@ -150,6 +180,20 @@ public:
 
     void writeInFile()
     {
+        if(file_name.empty()) {
+            chtype c;
+            addTempMessage("ECS to cancel | Enter name of the file: ");
+            while(c = getch()) {
+                if(c == KEY_ESC)
+                    return;
+                if(c == '\n' && !file_name.empty())
+                    break;
+                if(c == '\n')
+                    continue;
+                else if(isdigit(c) || isalpha(c))
+                    file_name.push_back(c);
+            }
+        }
         std::ofstream file(file_name);
         if(!file.is_open())
             return;
@@ -358,7 +402,8 @@ void endProg(const int a)
 
 void openFile(std::string name)
 {
-    E.file_name = name;
+    E.setFileName(name);
+
     std::ifstream file(name);
     if(!file.is_open())
         return;
@@ -384,18 +429,17 @@ void keyProcess()
     int pos_y = getcury(stdscr);
     int count;
     switch (c) {
-        case KEY_ESC:
+        case CTRL_Q:
             if(sexit == true || E.modif == false) {
-                E.writeInFile();
                 endProg(0);
             }
             else {
                 sexit = true;
-                E.addMessage("All changes not will be saved!");
+                E.addTempMessage("All changes not will be saved!");
             }
             break;
         
-        case CTRL_S:
+        case CTRL_S:             // here should be CTRL+S
             E.writeInFile();
             break;
 
@@ -450,6 +494,7 @@ void keyProcess()
             goToRowEnd();
             break;
 
+        case KEY_IL:
         case '\n':
         case KEY_ENTER:
             E.modif = true;
@@ -462,6 +507,10 @@ void keyProcess()
                 E.delRow();
             else
                 E.delChar();
+            break;
+
+            case KEY_DL:
+                E.delRow();
             break;
 
         case KEY_BACKSPACE:  
@@ -488,12 +537,15 @@ int main(int argc, char* argv[]) {
 
     getmaxyx(stdscr,height,width);
 
-     if(argv[1] != nullptr)
+    if(argv[1] != nullptr)
         openFile(argv[1]);
+    else
+        openFile("");
     
-    
-    halfdelay(1);
+
+    halfdelay(0);
     move(0,0);
+    raw();
     noecho();
     keypad(stdscr,TRUE);
 
