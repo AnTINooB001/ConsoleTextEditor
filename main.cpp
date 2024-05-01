@@ -2,6 +2,8 @@
 #include <string>
 #include <vector>
 #include <fstream>
+#include <unistd.h>
+#include <map>
 
 #define MENU_HEIGHT 2
 
@@ -32,6 +34,10 @@
 #define CTRL_Y 0x19
 #define CTRL_Z 0x1A
 #define KEY_ESC 0x1B
+#define FILE_SEP_KEY 0x1C
+#define GROUP_SEP_KEY 0x1D
+#define REC_SEP_KEY 0x1E
+#define UNIT_SEP_KEY 0x1F
 #define HOR_TAB CTRL_I
 #define LINE_FEED CTRL_J
 
@@ -40,6 +46,10 @@ void moveLeft();
 void moveRight();
 void moveDown();
 void moveUp();
+void goToRowEnd();
+void goToRowStart();
+void goToLastRow();
+void goToFirstRow();
 
 class editor
 {
@@ -52,7 +62,11 @@ public:
     int xoff,yoff;
     bool modif;
     editor(): xoff{0},yoff{0} { rows.push_back(""); modif = false; };
-
+    std::string getRowStr()
+    {
+        int y = getcury(stdscr) + yoff;
+        return rows[y];
+    }
     void setFileName(std::string str) //
     {
         if(str.empty()) {
@@ -94,6 +108,7 @@ public:
         rows.insert(it,str);
     }
 
+
     void printMenu()
     {
         int txtsz = 0;
@@ -110,16 +125,25 @@ public:
                 printw(" Saved |");
                 txtsz += 8;
             }
+            addch(' ');
             int sz = width-txtsz-2;
             if(sz < displaying_name.size()-1) {
+                std::string dots = "...";
+                sz -= dots.length();
                 for (size_t i = 0; i < sz; i++)
                 {
                     addch(displaying_name[i]);
                 }
+                printw(dots.c_str());
                 addch('|');
             }
             else
                 printw(" %s |",displaying_name.c_str());
+            move(height-MENU_HEIGHT+1,0);
+            printw("| CTRL+S to save |");
+            printw(" CTRL+D to search |");
+            printw(" %d rows |",rows.size());
+            printw(" %d row |",getcury(stdscr)+yoff);
         }
         else{
             printw("%s",message.c_str());
@@ -143,11 +167,11 @@ public:
         int ty = 0;
         clear();
         move(0,0);
-        for(int y = 0; y < height-MENU_HEIGHT; y++) {
-            if(y+yoff < rows.size()) {
-                int sz = rows[y+yoff].size();
+        for(int y = yoff; y < height-MENU_HEIGHT+yoff; y++) {
+            if(y < rows.size()) {
+                int sz = rows[y].size();
                 if(sz-xoff > 0) {
-                    insnstr(&rows[y+yoff].c_str()[xoff],rows[y+yoff].size()-xoff);
+                    insnstr(&rows[y].c_str()[xoff],rows[y].size()-xoff);
                 }
             }
             else
@@ -211,13 +235,20 @@ public:
             addMessage("ECS to cancel | Enter name of the file: ");
             printRows();
             while(c = getch()) {
-                if(c == KEY_ESC)
-                    break;
+                if(c == KEY_ESC){
+                    eraseMessage();
+                    printRows();
+                    return;
+                }
                 if(c == '\n' && !buff.empty())
                     break;
                 if(c == '\n')
                     continue;
-                else if(isdigit(c) || isalpha(c) || c == '.')
+                if( c == KEY_BACKSPACE || c == KEY_DL) {
+                    if(buff.end()-1 >= buff.begin())
+                        buff.erase(buff.end()-1);
+                }
+                else if(isalnum(c) || c == '.')
                     buff.push_back(c);
                 addMessage(buff);
                 printRows();
@@ -243,6 +274,39 @@ public:
     
         file.close();
         modif = false;
+    }
+
+    int searchWordInText(std::string str)
+    {
+        
+        int pos,y;
+        y = getcury(stdscr) + yoff;
+        int pos_x = getcurx(stdscr)+xoff;
+        pos = searchWordInRow(str,pos_x);
+        if(pos >= 0)
+            return pos;
+        goToRowStart();
+        while (y != rowsCount())
+        {
+            moveDown();
+            pos = searchWordInRow(str);
+            if(pos >= 0)
+                return pos;
+            y = getcury(stdscr) + yoff;
+        }
+        goToRowEnd();
+        return -1;
+    }
+
+    int searchWordInRow(std::string str,int i = 0)
+    {
+        int pos,y;
+        y = getcury(stdscr) + yoff;
+        if(y == rowsCount())
+           return -1;
+        if((pos = rows[y].find(str,i)) != std::string::npos)
+            return pos-i;
+        return -1;
     }
 };
 editor E;
@@ -325,6 +389,7 @@ void moveLeft()
 
 void moveRight()
 {
+    
     int pos_x = getcurx(stdscr);
     int pos_y = getcury(stdscr);
 
@@ -408,6 +473,22 @@ void insertRowFront(std::string str)
     E.xoff = 0;
 }
 
+void backSpaceCh()
+{
+    int pos_x = getcurx(stdscr);
+    int pos_y = getcury(stdscr);
+
+    E.modif = true;                   
+    if(pos_x+E.xoff == 0 && pos_y+E.yoff == 0)
+        return;
+    moveLeft();
+    pos_x = getcurx(stdscr);
+    if(pos_x+E.xoff == E.strLen())
+        E.delRow();
+    else
+        E.delChar();
+}
+
 void addChar(char c)
 {
     int pos_x = getcurx(stdscr);
@@ -426,11 +507,18 @@ void addChar(char c)
         E.insertChar((char)c);              
         moveRight();
     }
+
+
 }
 
 void endProg(const int a)
 {
+    noraw();
     echo();
+    clear();
+    keypad(stdscr,FALSE);
+    refresh();
+    endwin();
     exit(a);
 }
 
@@ -460,6 +548,7 @@ void keyProcess()
     int pos_x = getcurx(stdscr);
     int pos_y = getcury(stdscr);
     int count;
+    std::string str;
     switch (c) {
         case CTRL_Q:
             if(E.modif == false) {
@@ -485,10 +574,43 @@ void keyProcess()
             E.writeInFile();
             break;
 
+        case CTRL_D:
+            while (1)
+            {
+                E.eraseMessage();
+                E.addMessage("ESC to cancel | ");
+                E.addMessage(str);
+                E.printRows();
+
+                c = getKey();
+                if(c == KEY_ESC) {
+                    E.eraseMessage();
+                    E.printRows();
+                    return;
+                }
+                else if(c == '\n') {
+                    count = E.searchWordInText(str);
+                    break;
+                }
+                else if( c == KEY_BACKSPACE || c == KEY_DL) {
+                    if(str.end()-1 >= str.begin())
+                        str.erase(str.end()-1);
+                }
+                else if(isalnum(c)){
+                    str.push_back(c);
+                }
+            }
+            if(count > 0)
+                while (count--)
+                    moveRight();
+            
+            E.eraseMessage();
+            E.printRows();
+            break;
+
         case CTRL_A: // not realesed
         case CTRL_B:
         case CTRL_C:
-        case CTRL_D:
         case CTRL_E:
         case CTRL_F:
         case CTRL_G:
@@ -507,6 +629,10 @@ void keyProcess()
         case CTRL_X:
         case CTRL_Y:
         case CTRL_Z:
+        case FILE_SEP_KEY:
+        case GROUP_SEP_KEY:
+        case REC_SEP_KEY:
+        case UNIT_SEP_KEY:
             break;
 
         case HOR_TAB:
@@ -533,8 +659,10 @@ void keyProcess()
             break;
 
         case KEY_NPAGE:
-            count = height-MENU_HEIGHT;      
+            count = height-MENU_HEIGHT-1;      
             while(pos_y != count) {         //move to down edge of screen
+                if(pos_y == E.rowsCount())
+                    return;
                 moveDown();
                 pos_y = getcury(stdscr);
             }
@@ -564,7 +692,13 @@ void keyProcess()
         case LINE_FEED:
         case KEY_ENTER:
             E.modif = true;
-            insertRowBack("");
+            str = &E.getRowStr()[pos_x+E.xoff];
+            count = str.length();
+            goToRowEnd();
+            while(count--)
+                backSpaceCh();
+
+            insertRowBack(str);
             break;
 
         case KEY_DC: 
@@ -580,18 +714,12 @@ void keyProcess()
             break;
 
         case KEY_BACKSPACE:  
-            E.modif = true;                   
-            if(pos_x+E.xoff == 0 && pos_y+E.yoff == 0)
-                break;
-            moveLeft();
-            pos_x = getcurx(stdscr);
-            if(pos_x+E.xoff == E.strLen())
-                E.delRow();
-            else
-                E.delChar();
+            backSpaceCh();
             break;
 
         default:
+            if(!isgraph(c) && c != ' ')
+                return;
             E.modif = true;
             addChar(c);
             break;
@@ -601,12 +729,10 @@ void keyProcess()
 int main(int argc, char* argv[]) {
     initscr();
 
-    getmaxyx(stdscr,height,width);
-
     if(argv[1] != nullptr)
         openFile(argv[1]);
     else
-        openFile("");
+        openFile("/home/antinoob/Projects/cpp/ConsoleTextEditor/bin/test.txt");
     
 
     halfdelay(0);
@@ -616,9 +742,11 @@ int main(int argc, char* argv[]) {
     keypad(stdscr,TRUE);
 
     while (1) {
+        getmaxyx(stdscr,height,width);
+        int i = E.xoff;
+        int w = width+i;
         E.printRows();  
         keyProcess();
     }
-    clear();
-    endwin();
+    endProg(0);
 }
