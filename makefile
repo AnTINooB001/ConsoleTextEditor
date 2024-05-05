@@ -1,7 +1,7 @@
 CXX=g++
 CXX_FLAGS=-g -Wall
 
-TARGET=example
+TARGET=TEditor
 
 SRC_DIR=.
 BIN_DIR=bin
