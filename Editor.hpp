@@ -36,6 +36,9 @@ private:
     std::string displaying_name;
     std::string file_name;
     bool modif;
+private:
+    void printRows();
+    void printMenu();
 public:
     int xoff,yoff;
     Editor() = default;
@@ -44,11 +47,9 @@ public:
     void setFileName(std::string);
     void insertChar(char);
     void insertNewRow(std::string);
-    void printMenu();
     int getAllSymCount();
     void addMessage(std::string);
     void eraseMessage();
-    void printRows();
     void delChar();
     void delRowBelow();
     int rowsCount();
@@ -59,4 +60,5 @@ public:
     int searchWordInRow(std::string,int = 0);
     void setModif(bool);
     bool getModif();
+    void showScreen();
 };

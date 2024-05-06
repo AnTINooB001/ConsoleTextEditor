@@ -187,16 +187,23 @@ int Editor::strSz()
     return (y >= rows.size())? 0 :rows[y].size(); 
 }
 
+void Editor::showScreen()
+{
+    printRows();
+    printMenu();
+    refresh();
+}
+
 std::string Editor::getFileName() 
 {
     std::string buff;
     chtype c;
     addMessage("ECS to cancel | Enter name of the file: ");
-    printRows();
+    showScreen();
     while(c = getch()) {
         if(c == KEY_ESC){
             eraseMessage();
-            printRows();
+            showScreen();
             return "";
         }
         if(c == '\n' && !buff.empty())
@@ -211,7 +218,7 @@ std::string Editor::getFileName()
             buff.push_back(c);
 
         addMessage(buff);
-        printRows();
+        showScreen();
         eraseMessage();
         addMessage("ECS to cancel | Enter name of the file: ");
     }   
@@ -223,7 +230,7 @@ void Editor::writeInFile()
     if(file_name.empty()) {
         setFileName(getFileName());
         eraseMessage();
-        printRows();
+        showScreen();
     }
     
 

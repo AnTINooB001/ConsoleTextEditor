@@ -3,13 +3,6 @@
 Editor E;
 int extern height, width;
 
-void showScreen()
-{
-    E.printRows();
-    E.printMenu();
-    refresh();
-}
-
 void goToRowEnd()
 {
     int pos_x = getcurx(stdscr) + E.xoff;
@@ -188,24 +181,24 @@ void searchStr()
 {
     std::string str;
     int count;
-    char c;
+    chtype c;
 
     while (1) {
         E.eraseMessage();
         E.addMessage("ESC to cancel | ");
         E.addMessage(str);
-        showScreen();
+        E.showScreen();
 
         c = getKey();
         if(c == KEY_ESC) {
             E.eraseMessage();
-            showScreen();
+            E.showScreen();
             return;
         }
-        else if(c == '\n') {
+        if(c == '\n') {
             break;
         }
-        else if( c == KEY_BACKSPACE || c == KEY_DL) {
+        if( c == KEY_BACKSPACE || c == KEY_DL) {
             auto it = str.end()-1;
             if(it >= str.begin())
                 str.erase(it);
@@ -220,7 +213,7 @@ void searchStr()
             moveRight();
 
     E.eraseMessage();
-    showScreen();
+    E.showScreen();
 }
 
 void upPage()
@@ -332,9 +325,6 @@ void openFile(std::string name)
 void keyProcess()
 {
     chtype c = getKey();
-    int pos_x = getcurx(stdscr);
-    int pos_y = getcury(stdscr);
-    int count;
     std::string str;
     switch (c) {
         case CTRL_Q:
@@ -343,14 +333,14 @@ void keyProcess()
             }
             else {
                 E.addMessage("All changes not will be saved! You are sure? y or n ");
-                showScreen();
+                E.showScreen();
                 while(1) {
                     c = getKey();
                     if(tolower(c) == 'y')
                         endProg(0);
                     if(tolower(c) == 'n') {
                         E.eraseMessage();
-                        showScreen();
+                        E.showScreen();
                         return;
                     }
                 }
@@ -451,7 +441,7 @@ int main(int argc, char* argv[]) {
 
     while (1) {
         getmaxyx(stdscr,height,width);
-        showScreen();  
+        E.showScreen();  
         keyProcess();
     }
     endProg(0);
