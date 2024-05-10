@@ -224,13 +224,14 @@ std::string Editor::getFileName()
     }   
     return buff;
 }
-
+ 
 void Editor::writeInFile()
 {
     if(file_name.empty()) {
         setFileName(getFileName());
         eraseMessage();
         showScreen();
+        return;
     }
     
 

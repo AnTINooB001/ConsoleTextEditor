@@ -157,7 +157,7 @@ void insertRowBefore(std::string str)
     E.insertNewRow(str);
     moveDown();
 }
-
+ 
 void backSpaceCh()
 {
     moveLeft();
@@ -170,7 +170,6 @@ void addChar(char c)
 
     if(pos_y == E.rowsCount()) {     // if cursor located on not init row '~'
         insertRowBelow("");
-        return;
     }
 
     E.insertChar((char)c);         
@@ -203,7 +202,7 @@ void searchStr()
             if(it >= str.begin())
                 str.erase(it);
         }
-        else if(isalnum(c)){
+        else if(isgraph(c)){
             str.push_back(c);
         }
     }
