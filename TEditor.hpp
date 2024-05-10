@@ -8,8 +8,9 @@ class Editor
 private:
     void enableRawMode();
     void disableRawMode();
-    void insertCh(char);
+    void insCh(chtype);
     void insRowBelow(std::string);
+    void delRowBelow();
     void delCh();
     void endProg();
     void goToRowEnd();
@@ -19,10 +20,22 @@ private:
     void moveRight();
     void moveLeft();
     void processKey(chtype c);
-    void getKey();
+    void insTab();
+    void downPage();
+    void upPage();
+    void bsCh();
+    void addNewLine();
+    int searchWordInText(std::string);
+    int searchWordInRow(std::string,int = 0);
+    void searchStr();
+    void openFile(std::string);
+    void insRowBefore(std::string);
+    void goToFirstRow();
+private:
+    int height,menu_height;
 public:
     Editor(int);
-    void start();
+    void start(std::string);
     ~Editor();
 };
 
