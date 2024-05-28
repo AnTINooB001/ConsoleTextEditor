@@ -38,7 +38,7 @@ Editor::~Editor()
 
 void Editor::insCh(chtype c)
 {
-    if(!isgraph(c))
+    if(!isgraph(c) && !isspace(c))
         return;
     if(Kernel::getY() == Kernel::rowsCount())
         Kernel::insRow("");
@@ -61,8 +61,13 @@ void Editor::delCh()
         Kernel::moveDown();
         std::string buff = Kernel::eraseRow();
         Kernel::moveUp();
-        for(auto& el : buff)
+        int count = 0;
+        for(auto& el : buff) {
             insCh(el);
+            count++;
+        }
+        while(count--)
+            moveLeft();
     }
     else {
         Kernel::eraseCh();
