@@ -2,7 +2,7 @@
 
 int main(int argc, char* argv[]) {
 
-    Editor e(3);
+    Editor e(2);
     if(argv[1] != nullptr)
         e.start(argv[1]);
     else
