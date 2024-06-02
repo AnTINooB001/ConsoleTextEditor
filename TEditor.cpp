@@ -13,6 +13,7 @@ Editor::~Editor()
     disableRawMode();
     clear();
     refresh();
+    echo();
 }
 
 void Editor::enableRawMode()
@@ -93,7 +94,9 @@ void Editor::insTab()
 
 void Editor::addNewLine()
 {
-    std::string buff = &Kernel::getStr()[Kernel::getX()];
+    std::string buff;
+    if(Kernel::getY() < Kernel::rowsCount())
+        buff = &Kernel::getStr()[Kernel::getX()];
     for (int i = 0; i < buff.size(); i++)
     {
         delCh();
