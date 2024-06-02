@@ -10,6 +10,8 @@
                 "${file}",
                 "-o",
                 "${fileDirname}/${fileBasenameNoExtension}",
+                "Kernel.cpp",
+                "TEditor.cpp",
                 "-lncurses"
             ],
             "options": {

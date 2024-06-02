@@ -1,86 +1,12 @@
 #include "Kernel.hpp"
 
+// PUBLIC METHODS
+
 void Kernel::init()
 {
     initscr();
     getmaxyx(stdscr,height,width);
     rows.push_back("");
-}
-
-void Kernel::printRows()
-{
-    int sx = getcurx(stdscr);
-    int sy = getcury(stdscr);
-    int ty = 0;
-
-    clear();
-    move(0,0);
-    for(int y = yoff; y < height-menu_height+yoff; y++) {
-        if(y < rows.size()) {
-            int sz = rows[y].size();
-            if(sz-xoff > 0) {
-                insnstr(&rows[y].c_str()[xoff],rows[y].size()-xoff);
-            }
-        }
-        else
-            addch('~');
-        ty++;
-        move(ty,0);
-    }
-    move(sy,sx);
-}
-
-void Kernel::printMenu()
-{
-
-    int sx = getcurx(stdscr);
-    int sy = getcury(stdscr);
-
-    move(height-menu_height,0);
-    if(message.empty()) {
-        std::string to_print;
-        to_print.append("| CTRL+Q to exit |");
-
-        if(modif) {
-            to_print.append(" Modified |");
-        }
-        else {
-                to_print.append(" Saved |");
-        }
-            to_print.push_back(' ');
-        int sz = width-to_print.length()-1;
-        if(sz < displaying_name.length()) {
-            std::string dots = "...";
-            sz -= dots.length();
-            for (int i = 0; i < sz; i++)
-            {
-                    to_print.push_back(displaying_name[i]);
-            }
-            to_print.append(dots);
-            to_print.push_back('|');
-            printw(to_print.c_str());
-        }
-        else
-            printw("%s %s |",to_print.c_str(),displaying_name.c_str());
-        move(height-menu_height+1,0);
-        printw("| CTRL+S to save |");
-        printw(" CTRL+D to search |");
-        printw("row %d|",sy+yoff+1);
-        printw("col %d|",sx+xoff+1);
-        printw("rows %ld|",rows.size());
-        printw("cols %d|",getAllSymCount());
-    }
-    else{
-        printw("%s",message.c_str());
-    }
-    move(sy,sx);
-}
-
-void Kernel::showScreen()
-{
-    printRows();
-    printMenu();
-    refresh();
 }
 
 void Kernel::setMenuHeight(int h)
@@ -98,6 +24,65 @@ int Kernel::getY()
     return getcury(stdscr) + yoff;
 }
 
+int Kernel::getWinH()
+{
+    return height;
+}
+
+bool Kernel::getModif()
+{
+    return modif;
+}
+
+chtype Kernel::getKey()
+{
+    return getch();
+}
+
+std::string& Kernel::getStr()
+{
+    return rows[getY()];
+}
+
+int Kernel::getAllSymCount()
+{
+    int res = 0;
+    for(auto& el : rows)
+        res += el.length();
+    return res;
+}
+
+std::string Kernel::getFileName() 
+{
+    std::string buff;
+    chtype c;
+    addMsg("ECS to cancel | Enter name of the file: ");
+    showScreen();
+    while(c = getch()) {
+        if(c == KEY_ESC){
+            eraseMsg();
+            showScreen();
+            return "";
+        }
+        if(c == '\n' && !buff.empty())
+            break;
+        if(c == '\n')
+            continue;
+        if( c == KEY_BACKSPACE || c == KEY_DL) {
+            if(buff.end()-1 >= buff.begin())
+                buff.erase(buff.end()-1);
+        }
+        else if(isalnum(c) || c == '.')
+            buff.push_back(c);
+
+        addMsg(std::move(buff));
+        showScreen();
+        eraseMsg();
+        addMsg("ECS to cancel | Enter name of the file: ");
+    }   
+    return buff;
+}
+
 int Kernel::strLen()
 {
     return rows[getY()].length();
@@ -113,14 +98,29 @@ int Kernel::rowsCount()
     return rows.size();
 }
 
-void Kernel::addMsg(std::string str)
+void Kernel::setModif(bool m)
 {
-    message.append(str);
+    modif = m;
 }
 
-void Kernel::eraseMsg()
+void Kernel::setFileName(std::string str) 
 {
-    message.clear();
+    if(str.empty()) {
+        displaying_name = "Unnamed";
+        return;
+    }   
+    file_name = str;
+
+    auto it = str.end()-1;
+    auto b = str.begin();
+
+    while(it-- > b)
+        if(*it == '/' || *it == '\\')
+            break;
+    it++;
+    
+    displaying_name.clear();
+    displaying_name.append(&(*it));
 }
 
 void Kernel::moveUp()
@@ -191,20 +191,7 @@ void Kernel::insCh(char c)
 
     if(it <= rows[y].end()) {
         rows[y].insert(it,c);
-    }
-    
-}
-
-void Kernel::insRow(std::string str)
-{
-    int temp = getcury(stdscr)+yoff;
-    auto it = rows.begin();
-
-    while(temp--)
-        it++;
-
-    if(it <= rows.end())
-        rows.insert(it,str);
+    }   
 }
 
 void Kernel::eraseCh()
@@ -217,6 +204,27 @@ void Kernel::eraseCh()
         it++;
     if(it < rows[y].end())
         rows[y].erase(it);
+}
+
+void Kernel::insStr(std::string&& str)
+{
+    int y = getY();
+    rows[y] += str;
+    int count = str.size();
+    while(count--)
+        moveRight();
+}
+
+void Kernel::insRow(std::string str)
+{
+    int temp = getcury(stdscr)+yoff;
+    auto it = rows.begin();
+
+    while(temp--)
+        it++;
+
+    if(it <= rows.end())
+        rows.insert(it,str);
 }
 
 std::string Kernel::eraseRow()
@@ -233,84 +241,31 @@ std::string Kernel::eraseRow()
         return row;
     }
 
-    return nullptr;
+    return "";
 }
 
-int Kernel::getAllSymCount()
+void Kernel::addMsg(std::string&& str)
 {
-    int res = 0;
-    for(auto& el : rows)
-        res += el.length();
-    return res;
+    message.append(str);
 }
 
-std::string Kernel::getFileName() 
+void Kernel::eraseMsg()
 {
-    std::string buff;
-    chtype c;
-    addMsg("ECS to cancel | Enter name of the file: ");
-    showScreen();
-    while(c = getch()) {
-        if(c == KEY_ESC){
-            eraseMsg();
-            showScreen();
-            return "";
-        }
-        if(c == '\n' && !buff.empty())
-            break;
-        if(c == '\n')
-            continue;
-        if( c == KEY_BACKSPACE || c == KEY_DL) {
-            if(buff.end()-1 >= buff.begin())
-                buff.erase(buff.end()-1);
-        }
-        else if(isalnum(c) || c == '.')
-            buff.push_back(c);
-
-        addMsg(buff);
-        showScreen();
-        eraseMsg();
-        addMsg("ECS to cancel | Enter name of the file: ");
-    }   
-    return buff;
+    message.clear();
 }
 
-void Kernel::setFileName(std::string str) //
-{
-    if(str.empty()) {
-        displaying_name = "Unnamed";
-        return;
-    }
-    file_name = str;
-
-    auto it = str.end()-1;
-    auto b = str.begin();
-
-    while(it-- > b)
-        if(*it == '/' || *it == '\\')
-            break;
-    it++;
-    
-    displaying_name.clear();
-    displaying_name.append(&(*it));
-}
-
-void Kernel::writeInFile()
+int Kernel::writeInFile()
 {
     if(file_name.empty()) {
         setFileName(getFileName());
         eraseMsg();
         showScreen();
-        return;
     }
     
-
     std::ofstream file(file_name);
-    if(!file.is_open()) {
-        addMsg("Cant open file, enter filename again. ");
-        setFileName(getFileName());
-        return;
-    }
+
+    if(!file.is_open()) 
+        return FILE_NOT_WRITTEN;
 
     auto e = rows.end();
     for (auto it = rows.begin(); it < e; it++)
@@ -322,30 +277,91 @@ void Kernel::writeInFile()
     }
 
     file.close();
-    modif = false;
+    return FILE_WRITTEN;
 }
 
-bool Kernel::getModif()
+void Kernel::showScreen()
 {
-    return modif;
+    printRows();
+    printMenu();
+    refresh();
 }
 
-void Kernel::setModif(bool m)
+// PRIVATE METHODS
+
+void Kernel::printRows()
 {
-    modif = m;
+    int sx = getcurx(stdscr);
+    int sy = getcury(stdscr);
+    int ty = 0;
+
+    clear();
+    move(0,0);
+    for(int y = yoff; y < height-menu_height+yoff; y++) {
+        if(y < rows.size()) {
+            int sz = rows[y].size();
+            if(sz-xoff > 0) {
+                insnstr(&rows[y].c_str()[xoff],rows[y].size()-xoff);
+            }
+        }
+        else
+            addch('~');
+        ty++;
+        move(ty,0);
+    }
+    move(sy,sx);
 }
 
-std::string Kernel::getStr()
+void Kernel::printMenu()
 {
-    return rows[getY()];
+
+    int sx = getcurx(stdscr);
+    int sy = getcury(stdscr);
+
+    move(height-menu_height,0);
+    if(message.empty()) {
+        std::string to_print;
+        to_print.append("| CTRL+Q to exit |");
+
+        if(modif) {
+            to_print.append(" Modified |");
+        }
+        else {
+                to_print.append(" Saved |");
+        }
+            to_print.push_back(' ');
+        int sz = width-to_print.length()-1;
+        if(sz < displaying_name.length()) {
+            std::string dots = "...";
+            sz -= dots.length();
+            for (int i = 0; i < sz; i++)
+            {
+                    to_print.push_back(displaying_name[i]);
+            }
+            to_print.append(dots);
+            to_print.push_back('|');
+            printw(to_print.c_str());
+        }
+        else
+            printw("%s %s |",to_print.c_str(),displaying_name.c_str());
+        move(height-menu_height+1,0);
+        printw("| CTRL+S to save |");
+        printw(" CTRL+D to search |");
+        printw("row %d|",sy+yoff+1);
+        printw("col %d|",sx+xoff+1);
+        printw("rows %ld|",rows.size());
+        printw("syms %d|",getAllSymCount());
+    }
+    else{
+        printw("%s",message.c_str());
+    }
+    move(sy,sx);
 }
 
-chtype Kernel::getKey()
-{
-    return getch();
-}
 
-int Kernel::getWinH()
-{
-    return height;
-}
+
+
+
+
+
+

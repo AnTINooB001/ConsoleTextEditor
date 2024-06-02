@@ -1,8 +1,22 @@
 #include "TEditor.hpp"
 
+Editor::Editor(int h) : menu_height{h}
+{   
+    Kernel::init();
+    Kernel::setMenuHeight(h);
+    height = Kernel::getWinH();
+    enableRawMode();
+}
+
+Editor::~Editor()
+{
+    disableRawMode();
+    clear();
+    refresh();
+}
+
 void Editor::enableRawMode()
 {
-    //halfdelay(0);
     move(0,0);
     raw();
     noecho();
@@ -16,26 +30,6 @@ void Editor::disableRawMode()
     keypad(stdscr,FALSE);
 }
 
-void Editor::endProg()
-{
-    disableRawMode();
-    clear();
-    refresh();
-}
-
-Editor::Editor(int h) : menu_height{h}
-{   
-    Kernel::init();
-    Kernel::setMenuHeight(h);
-    height = Kernel::getWinH();
-    enableRawMode();
-}
-
-Editor::~Editor()
-{
-    endProg();
-}
-
 void Editor::insCh(chtype c)
 {
     if(!isgraph(c) && !isspace(c))
@@ -47,13 +41,6 @@ void Editor::insCh(chtype c)
     moveRight();
 }
 
-void Editor::insRowBelow(std::string str)
-{
-    moveDown();
-    Kernel::insRow(str);
-    moveUp();
-}
-
 void Editor::delCh()
 {
     
@@ -61,17 +48,64 @@ void Editor::delCh()
         Kernel::moveDown();
         std::string buff = Kernel::eraseRow();
         Kernel::moveUp();
-        int count = 0;
-        for(auto& el : buff) {
-            insCh(el);
-            count++;
-        }
+        Kernel::insStr(std::move(buff));
+        int count = buff.size();
         while(count--)
             moveLeft();
     }
     else {
         Kernel::eraseCh();
     }
+}
+
+void Editor::bsCh()
+{
+    moveLeft();
+    delCh();
+}
+
+void Editor::insRowBelow(std::string&& str)
+{
+    moveDown();
+    Kernel::insRow(str);
+    moveUp();
+}
+
+void Editor::delRowBelow()
+{
+    int pos_x = Kernel::getX();
+
+    goToRowStart();
+    moveDown();
+    Kernel::eraseRow();
+    moveUp();
+
+    while(pos_x--)
+        moveRight();
+}
+
+void Editor::insTab()
+{
+    int count = TABSIZE;
+    while(count--)
+        insCh(' ');
+}
+
+void Editor::addNewLine()
+{
+    std::string buff = &Kernel::getStr()[Kernel::getX()];
+    for (int i = 0; i < buff.size(); i++)
+    {
+        delCh();
+    }
+    moveDown();
+    Kernel::insRow(buff);
+}
+
+void Editor::insRowBefore(std::string&& str)
+{
+    Kernel::insRow(str);
+    moveDown();
 }
 
 void Editor::goToRowEnd()
@@ -99,6 +133,16 @@ void Editor::goToRowStart()
     while(pos_x > 0) {
         moveLeft();
         pos_x = Kernel::getX();
+    }
+}
+
+void Editor::goToFirstRow()
+{
+    int pos_y = Kernel::getY();
+
+    while(pos_y > 0) {
+        moveUp();
+        pos_y = Kernel::getX();
     }
 }
 
@@ -139,7 +183,12 @@ void Editor::moveRight()
 
 void Editor::moveLeft()
 {
-    if(Kernel::getX() <= 0) {
+    int x_pos = Kernel::getX();
+    int y_pos = Kernel::getY();
+
+    if(x_pos <= 0 && y_pos <=0)
+        return;
+    if(x_pos <= 0) {
         Kernel::moveUp();
         goToRowEnd();
         return;
@@ -147,12 +196,134 @@ void Editor::moveLeft()
     Kernel::moveLeft();
 }
 
-void Editor::processKey(chtype c)
+void Editor::downPage()
+{
+    int count = height-menu_height-1;   
+    int pos_y = getcury(stdscr);
+
+    while(pos_y != count) {         //move to down edge of screen
+        if(pos_y == Kernel::rowsCount())
+            return;
+        moveDown();
+        pos_y = getcury(stdscr);
+    }
+    while(count--)                  //move on 1 screen Width below
+        moveDown();
+}
+
+void Editor::upPage()
+{
+   int count = height-menu_height;     
+   int pos_y = getcury(stdscr);
+    while(pos_y != 0) {         //move to up edge of screen
+        moveUp();
+        pos_y = getcury(stdscr);
+    }
+    while(count--)                  //move on 1 screen Width upper
+        moveUp();
+}
+
+int Editor::searchWordInText(std::string&& str)
+{
+    int pos_y = Kernel::getY();
+    int pos_x = Kernel::getX();
+    int pos = searchWordInRow(str,pos_x);
+
+    if(pos >= 0)
+        return pos;
+
+    goToRowStart();
+    while (pos_y != Kernel::rowsCount())
+    {
+        moveDown();
+        if((pos = searchWordInRow(str)) >= 0)
+            return pos;
+        pos_y = Kernel::getY();
+    }
+    goToRowEnd();
+    return -1;
+}
+
+int Editor::searchWordInRow(std::string str,int i)
+{
+    int pos;
+    int y = Kernel::getY();
+
+    if(y == Kernel::rowsCount())
+       return -1;
+
+    if((pos = Kernel::getStr().find(str,i)) != std::string::npos)
+        return pos-i;
+
+    return -1;
+}
+
+void Editor::searchStr()
+{
+    std::string str;
+    int count;
+    chtype c;
+
+    while (1) {
+        Kernel::eraseMsg();
+        Kernel::addMsg("ESC to cancel | ");
+        Kernel::addMsg(std::move(str));
+        Kernel::showScreen();
+
+        c = Kernel::getKey();
+        if(c == KEY_ESC) {
+            Kernel::eraseMsg();
+            Kernel::showScreen();
+            return;
+        }
+        if(c == '\n') {
+            break;
+        }
+        if( c == KEY_BACKSPACE || c == KEY_DL) {
+            auto it = str.end()-1;
+            if(it >= str.begin())
+                str.erase(it);
+        }
+        else if(isgraph(c)){
+            str.push_back(c);
+        }
+    }
+    count = searchWordInText(std::move(str));
+    if(count > 0)
+        while (count--)
+            moveRight();
+
+    Kernel::eraseMsg();
+    Kernel::showScreen();
+}
+
+void Editor::ReadFromFile(std::string name)
+{
+    Kernel::setFileName(name);
+    std::ifstream file(name);
+    if(!file.is_open())
+        return;
+
+    std::string buff;
+    while(1) {
+        std::getline(file,buff);
+        insRowBefore(std::move(buff));
+        if(file.eof())
+            break;
+    }
+    
+    file.close();
+    goToRowStart();
+    goToFirstRow();
+    Kernel::setModif(false);
+}
+
+int Editor::processKey(chtype c)
 {
     switch (c) {
         case CTRL_Q:
             if(Kernel::getModif() == false) {
-                exit(0);
+                return EXIT_MODE;
             }
             else {
                 Kernel::addMsg("All changes not will be saved! You are sure? y or n ");
@@ -160,11 +331,11 @@ void Editor::processKey(chtype c)
                 while(1) {
                     c = Kernel::getKey();
                     if(tolower(c) == 'y')
-                        exit(0);
+                        return EXIT_MODE;
                     if(tolower(c) == 'n') {
                         Kernel::eraseMsg();
                         Kernel::showScreen();
-                        return;
+                        return CONTINUE_MODE;
                     }
                 }
             }
@@ -173,7 +344,10 @@ void Editor::processKey(chtype c)
             insRowBelow("");
             break;
         case CTRL_S:           
-            Kernel::writeInFile();
+            if(Kernel::writeInFile() == FILE_WRITTEN)
+                Kernel::setModif(false);
+            else
+                Kernel::setModif(true);
             break;
 
         case CTRL_D:
@@ -241,185 +415,16 @@ void Editor::processKey(chtype c)
             Kernel::setModif(true);
             break;
     }
+    return CONTINUE_MODE;
 }
 
 void Editor::start(std::string path)
 {
-    openFile(path);
+    ReadFromFile(path);
 
     while(1) {
         Kernel::showScreen();
-        processKey(getch());
-    }
-}
-
-
-void Editor::insTab()
-{
-    int count = TABSIZE;
-    while(count--)
-        insCh(' ');
-}
-
-void Editor::upPage()
-{
-   int count = height-menu_height;     
-   int pos_y = getcury(stdscr);
-    while(pos_y != 0) {         //move to up edge of screen
-        moveUp();
-        pos_y = getcury(stdscr);
-    }
-    while(count--)                  //move on 1 screen Width upper
-        moveUp();
-}
-
-void Editor::downPage()
-{
-    int count = height-menu_height-1;   
-    int pos_y = getcury(stdscr);
-
-    while(pos_y != count) {         //move to down edge of screen
-        if(pos_y == Kernel::rowsCount())
+        if(processKey(getch()) == EXIT_MODE)
             return;
-        moveDown();
-        pos_y = getcury(stdscr);
-    }
-    while(count--)                  //move on 1 screen Width below
-        moveDown();
-}
-
-void Editor::delRowBelow()
-{
-    int pos_x = Kernel::getX();
-
-    goToRowStart();
-    moveDown();
-    Kernel::eraseRow();
-    moveUp();
-
-    while(pos_x--)
-        moveRight();
-}
-
-void Editor::bsCh()
-{
-    moveLeft();
-    delCh();
-}
-
-void Editor::addNewLine()
-{
-    moveDown();
-    Kernel::insRow("");
-}
-
-int Editor::searchWordInText(std::string str)
-{
-    int pos_y = Kernel::getY();
-    int pos_x = Kernel::getX();
-    int pos = searchWordInRow(str,pos_x);
-
-    if(pos >= 0)
-        return pos;
-
-    goToRowStart();
-    while (pos_y != Kernel::rowsCount())
-    {
-        moveDown();
-        if((pos = searchWordInRow(str)) >= 0)
-            return pos;
-        pos_y = Kernel::getY();
-    }
-    goToRowEnd();
-    return -1;
-}
-
-int Editor::searchWordInRow(std::string str,int i)
-{
-    int pos;
-    int y = Kernel::getY();
-
-    if(y == Kernel::rowsCount())
-       return -1;
-
-    if((pos = Kernel::getStr().find(str,i)) != std::string::npos)
-        return pos-i;
-
-    return -1;
-}
-
-void Editor::searchStr()
-{
-    std::string str;
-    int count;
-    chtype c;
-
-    while (1) {
-        Kernel::eraseMsg();
-        Kernel::addMsg("ESC to cancel | ");
-        Kernel::addMsg(str);
-        Kernel::showScreen();
-
-        c = Kernel::getKey();
-        if(c == KEY_ESC) {
-            Kernel::eraseMsg();
-            Kernel::showScreen();
-            return;
-        }
-        if(c == '\n') {
-            break;
-        }
-        if( c == KEY_BACKSPACE || c == KEY_DL) {
-            auto it = str.end()-1;
-            if(it >= str.begin())
-                str.erase(it);
-        }
-        else if(isgraph(c)){
-            str.push_back(c);
-        }
-    }
-    count = searchWordInText(str);
-    if(count > 0)
-        while (count--)
-            moveRight();
-
-    Kernel::eraseMsg();
-    Kernel::showScreen();
-}
-
-void Editor::openFile(std::string name)
-{
-    Kernel::setFileName(name);
-    std::ifstream file(name);
-    if(!file.is_open())
-        return;
-
-    std::string buff;
-    while(1) {
-        std::getline(file,buff);
-        insRowBefore(buff);
-        if(file.eof())
-            break;
-    }
-    
-    file.close();
-    goToRowStart();
-    goToFirstRow();
-    Kernel::setModif(false);
-}
-
-void Editor::insRowBefore(std::string str)
-{
-    Kernel::insRow(str);
-    moveDown();
-}
-
-void Editor::goToFirstRow()
-{
-    int pos_y = Kernel::getX();
-
-    while(pos_y > 0) {
-        moveUp();
-        pos_y = Kernel::getX();
     }
 }
